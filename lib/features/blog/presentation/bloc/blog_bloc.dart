@@ -22,6 +22,11 @@ class BlogBloc extends Bloc<BlogEvent, BlogState> {
   final UpdateBlog _updateBlogCase;
   final GetMyBlogs _getMyBlogsCase;
   final GetBlogsLocally _getBlogsLocallyCase;
+
+  // Cache to prevent unnecessary reloads
+  List<Blog>? _cachedBlogs;
+  String? _lastUserId;
+
   BlogBloc({
     required GetBlogsLocally getLocalBlogs,
     required GetBlogs getBlogs,
@@ -43,33 +48,79 @@ class BlogBloc extends Bloc<BlogEvent, BlogState> {
     on<BlogGetMyBlogs>(_getMyBlogs);
     on<BlogGetBlogsLocally>(_getBlogsLocally);
   }
+
   void _getBlogsLocally(
     BlogGetBlogsLocally event,
     Emitter<BlogState> emit,
   ) async {
-    emit(BlogLoading());
+    // Only show loading if we don't have cached data
+    if (_cachedBlogs == null || _lastUserId != event.id) {
+      emit(BlogLoading());
+    }
+
     final res = await _getBlogsLocallyCase(GetBlogsParams(id: event.id));
     res.fold(
-      (l) => emit(BlogFailure(message: l.message)),
-      (r) => emit(BlogLoaded(blogList: r)),
+      (l) {
+        // Keep cached data on error if available
+        if (_cachedBlogs != null) {
+          emit(BlogLoaded(blogList: _cachedBlogs));
+        } else {
+          emit(BlogFailure(message: l.message));
+        }
+      },
+      (r) {
+        _cachedBlogs = r;
+        _lastUserId = event.id;
+        emit(BlogLoaded(blogList: r));
+      },
     );
   }
 
   void _getMyBlogs(BlogGetMyBlogs event, Emitter<BlogState> emit) async {
-    emit(BlogLoading());
+    // Only show loading if we don't have cached data
+    if (_cachedBlogs == null || _lastUserId != event.id) {
+      emit(BlogLoading());
+    }
+
     final res = await _getMyBlogsCase(GetBlogsParams(id: event.id));
     res.fold(
-      (l) => emit(BlogFailure(message: l.message)),
-      (r) => emit(BlogLoaded(blogList: r)),
+      (l) {
+        // Keep cached data on error if available
+        if (_cachedBlogs != null) {
+          emit(BlogLoaded(blogList: _cachedBlogs));
+        } else {
+          emit(BlogFailure(message: l.message));
+        }
+      },
+      (r) {
+        _cachedBlogs = r;
+        _lastUserId = event.id;
+        emit(BlogLoaded(blogList: r));
+      },
     );
   }
 
   void _loadBlogs(BlogLoadBlogs event, Emitter<BlogState> emit) async {
-    emit(BlogLoading());
+    // Only show loading if we don't have cached data
+    if (_cachedBlogs == null || _lastUserId != event.id) {
+      emit(BlogLoading());
+    }
+
     final res = await _getBlogsCase.call(GetBlogsParams(id: event.id));
     res.fold(
-      (l) => emit(BlogFailure(message: l.message)),
-      (r) => emit(BlogLoaded(blogList: r)),
+      (l) {
+        // Keep cached data on error if available
+        if (_cachedBlogs != null) {
+          emit(BlogLoaded(blogList: _cachedBlogs));
+        } else {
+          emit(BlogFailure(message: l.message));
+        }
+      },
+      (r) {
+        _cachedBlogs = r;
+        _lastUserId = event.id;
+        emit(BlogLoaded(blogList: r));
+      },
     );
   }
 
@@ -84,20 +135,39 @@ class BlogBloc extends Bloc<BlogEvent, BlogState> {
       ),
     );
     res.fold((l) => emit(BlogFailure(message: l.message)), (r) {
+      // Optimistically add to cache
+      if (_cachedBlogs != null) {
+        _cachedBlogs = [r, ..._cachedBlogs!];
+      }
       emit(BlogPosted(status: "Blog Posted Successfully"));
-      // After posting, reload blogs to show the new one
-      add(BlogLoadBlogs(id: event.userId));
     });
   }
 
   void _deleteBlog(BlogDeleteBlog event, Emitter<BlogState> emit) async {
-    emit(BlogLoading());
-    print(event.id);
+    // Don't show loading, do optimistic update
+    final currentState = state;
+    if (currentState is BlogLoaded && currentState.blogList != null) {
+      // Optimistically remove from cache
+      _cachedBlogs = currentState.blogList!
+          .where((blog) => blog.id != event.id)
+          .toList();
+      emit(BlogLoaded(blogList: _cachedBlogs));
+    } else {
+      emit(BlogLoading());
+    }
+
     final res = await _deleteBlogCase.call(DeleteBlogParams(id: event.id));
-    res.fold((l) => emit(BlogFailure(message: l.message)), (r) {
-      emit(BlogDeleted(blog: r));
-      add(BlogLoadBlogs(id: event.userId));
-    });
+    res.fold(
+      (l) {
+        // Revert on error
+        emit(BlogFailure(message: l.message));
+        add(BlogLoadBlogs(id: event.userId));
+      },
+      (r) {
+        emit(BlogDeleted(blog: r));
+        // Cache is already updated
+      },
+    );
   }
 
   void _updateBlog(BlogUpdateBlog event, Emitter<BlogState> emit) async {
@@ -112,8 +182,19 @@ class BlogBloc extends Bloc<BlogEvent, BlogState> {
       ),
     );
     res.fold((l) => emit(BlogFailure(message: l.message)), (r) {
+      // Update cache
+      if (_cachedBlogs != null) {
+        _cachedBlogs = _cachedBlogs!.map((blog) {
+          return blog.id == r.id ? r : blog;
+        }).toList();
+      }
       emit(BlogUpdated(blog: r));
-      add(BlogLoadBlogs(id: event.userId));
     });
+  }
+
+  // Clear cache when needed
+  void clearCache() {
+    _cachedBlogs = null;
+    _lastUserId = null;
   }
 }

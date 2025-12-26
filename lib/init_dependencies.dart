@@ -20,7 +20,7 @@ import 'package:blog_app/features/blog/domain/usecases/post_blog.dart';
 import 'package:blog_app/features/blog/domain/usecases/delete_blog.dart';
 import 'package:blog_app/features/blog/domain/usecases/update_blog.dart';
 import 'package:blog_app/features/blog/presentation/bloc/blog_bloc.dart';
-import 'package:blog_app/core/common/bloc/bloc/connection_bloc.dart';
+import 'package:blog_app/core/common/bloc/app_connection/bloc/connection_bloc.dart';
 
 // Add these imports
 import 'package:blog_app/core/common/utils/init_local_db.dart';

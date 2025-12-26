@@ -1,5 +1,5 @@
 import 'package:blog_app/core/color_pallate.dart';
-import 'package:blog_app/core/common/bloc/bloc/connection_bloc.dart';
+import 'package:blog_app/core/common/bloc/app_connection/bloc/connection_bloc.dart';
 import 'package:blog_app/core/common/cubits/app_user/app_user_cubit.dart';
 import 'package:blog_app/core/common/widgets/loader.dart';
 import 'package:blog_app/features/blog/presentation/bloc/blog_bloc.dart';
